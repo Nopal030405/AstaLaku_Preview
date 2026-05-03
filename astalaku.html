@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AstaLaku — Gerak Kamu, Perintah Robot</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!-- MediaPipe Hands dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+:root {
+  --lime:#c8ff00;
+  --cyan:#00ffcc;
+  --pink:#ff2d78;
+  --dark:#060810;
+  --dark2:#0d1120;
+  --dark3:#121929;
+  --card:#141a2e;
+  --glass:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.07);
+  --text:#f0f4ff;
+  --muted:#6b7da8;
+  --mono:'JetBrains Mono', monospace;
+}
+body { background:var(--dark); color:var(--text); font-family:'DM Sans',sans-serif; overflow-x:hidden; }
+#bg-canvas { position:fixed;inset:0;z-index:0;pointer-events:none; }
+
+nav { position:fixed;top:0;left:0;right:0;z-index:500;display:flex;align-items:center;justify-content:space-between;padding:1.2rem 2.5rem;background:rgba(6,8,16,0.75);backdrop-filter:blur(24px);border-bottom:1px solid var(--border); }
+.logo { font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.12em;background:linear-gradient(90deg,var(--lime),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text; }
+.nav-links { display:flex;gap:2rem;list-style:none; }
+.nav-links a { color:var(--muted);text-decoration:none;font-size:0.875rem;font-weight:500;letter-spacing:0.04em;transition:color 0.2s; }
+.nav-links a:hover { color:var(--text); }
+.nav-pill { background:var(--lime);color:#000!important;padding:0.55rem 1.4rem;border-radius:50px;font-weight:700!important;font-size:0.875rem;letter-spacing:0.04em;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 0 20px rgba(200,255,0,0.25); }
+.nav-pill:hover { transform:scale(1.05);box-shadow:0 0 35px rgba(200,255,0,0.5); }
+
+.hero { min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6rem 2rem 3rem;text-align:center;position:relative;z-index:1; }
+.hero-eyebrow { display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:0.72rem;letter-spacing:0.12em;color:var(--lime);margin-bottom:2rem;opacity:0;animation:sD 0.7s 0.2s ease forwards; }
+.e-dot { width:6px;height:6px;border-radius:50%;background:var(--lime);animation:ping 1.5s infinite; }
+@keyframes ping{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(2.5);opacity:0}}
+.hero h1 { font-family:'Bebas Neue',sans-serif;font-size:clamp(4.5rem,12vw,10rem);line-height:0.9;letter-spacing:0.03em;opacity:0;animation:sD 0.8s 0.35s ease forwards; }
+.h1-ghost { color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,0.18);display:block; }
+.h1-acc { color:var(--lime);display:block; }
+.hero-sub { max-width:500px;color:var(--muted);font-size:1.05rem;line-height:1.75;margin:1.8rem auto 2.5rem;opacity:0;animation:sD 0.8s 0.5s ease forwards; }
+.hero-btns { display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;opacity:0;animation:sD 0.8s 0.65s ease forwards; }
+.btn-lime { background:var(--lime);color:#000;padding:0.9rem 2.4rem;border-radius:4px;text-decoration:none;font-weight:700;font-size:0.9rem;letter-spacing:0.05em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 0 30px rgba(200,255,0,0.3); }
+.btn-lime:hover { transform:translateY(-2px);box-shadow:0 8px 40px rgba(200,255,0,0.5); }
+.btn-out { border:1px solid var(--border);color:var(--text);padding:0.9rem 2.4rem;border-radius:4px;text-decoration:none;font-weight:500;font-size:0.9rem;transition:border-color 0.2s,background 0.2s; }
+.btn-out:hover { border-color:rgba(200,255,0,0.3);background:rgba(200,255,0,0.04); }
+@keyframes sD{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:none}}
+@keyframes fU{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+
+.demo-wrap { margin-top:4rem;opacity:0;animation:fU 1s 0.8s ease forwards; }
+.demo-outer { background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.5rem;display:inline-block;position:relative; }
+.demo-outer::before { content:'';position:absolute;inset:-1px;border-radius:20px;background:linear-gradient(135deg,rgba(200,255,0,0.12),transparent 50%,rgba(0,255,204,0.08));pointer-events:none; }
+.demo-bar { display:flex;align-items:center;gap:8px;margin-bottom:1rem; }
+.ddot { width:8px;height:8px;border-radius:50%; }
+.d1{background:#ff5f57}.d2{background:#febc2e}.d3{background:#28c840}
+.demo-ttl { font-family:var(--mono);font-size:0.7rem;color:var(--muted);margin-left:4px; }
+.demo-live { display:flex;align-items:center;gap:6px;margin-left:auto;font-family:var(--mono);font-size:0.66rem;color:var(--lime);font-weight:600; }
+.live-dot { width:6px;height:6px;border-radius:50%;background:var(--lime);animation:ping 1.2s infinite; }
+#robot-canvas { display:block;border-radius:12px;background:#080c18;border:1px solid rgba(255,255,255,0.05); }
+.g-legend { display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap; justify-content:center; }
+.leg-item { display:flex; flex-direction:column; align-items:center; padding:0.4rem 0.8rem; border-radius:6px; border:1px solid var(--border); background:rgba(6,8,16,0.5); transition:all 0.15s; width:80px;}
+.leg-item.active { background:rgba(200,255,0,0.12); border-color:var(--lime); box-shadow:0 0 20px rgba(200,255,0,0.15); transform:translateY(-2px); }
+.leg-item.active .leg-c { color:var(--lime); }
+.leg-j { font-family:var(--mono); font-size:0.6rem; color:var(--muted); margin-bottom:4px; letter-spacing:0.05em; }
+.leg-c { font-family:var(--mono); font-size:0.75rem; color:var(--text); font-weight:700; letter-spacing:0.05em; }
+
+.marquee-wrap { padding:1.4rem 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:hidden;position:relative;z-index:1; }
+.marquee-track { display:flex;width:max-content;animation:marquee 20s linear infinite; }
+.marquee-item { display:flex;align-items:center;gap:2rem;padding:0 3rem;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.15em;color:var(--muted);white-space:nowrap; }
+.marquee-item span { color:var(--lime);font-size:0.85rem; }
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+.container { max-width:1100px;margin:0 auto;padding:0 2rem; }
+.sec { padding:7rem 0;position:relative;z-index:1; }
+.sec-border { border-top:1px solid var(--border); }
+
+.sec-label { font-family:var(--mono);font-size:0.68rem;letter-spacing:0.15em;color:var(--lime);text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:8px; }
+.sec-label::before { content:'//';opacity:0.5; }
+.sec-title { font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,6vw,5rem);letter-spacing:0.04em;line-height:0.95;margin-bottom:1.2rem; }
+.t-ghost { color:transparent;-webkit-text-stroke:1px rgba(255,255,255,0.18); }
+.sec-body { color:var(--muted);font-size:1rem;line-height:1.75;max-width:520px; }
+
+.who-grid { display:grid;grid-template-columns:1fr 1.2fr;gap:5rem;align-items:center; }
+.aud-grid { display:grid;grid-template-columns:1fr 1fr;gap:0.75rem; }
+.aud-card { background:var(--glass);border:1px solid var(--border);border-radius:14px;padding:1.4rem;transition:transform 0.25s,border-color 0.25s;position:relative;overflow:hidden; }
+.aud-card::after { content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:0;transition:opacity 0.25s; }
+.aud-card:hover { transform:translateY(-4px);border-color:rgba(200,255,0,0.2); }
+.aud-card:hover::after { opacity:1; }
+.a1::after{background:linear-gradient(to right,var(--lime),transparent)}
+.a2::after{background:linear-gradient(to right,var(--cyan),transparent)}
+.a3::after{background:linear-gradient(to right,var(--pink),transparent)}
+.a4::after{background:linear-gradient(to right,#ffaa00,transparent)}
+.aud-ico { font-size:1.8rem;margin-bottom:0.6rem;display:block; }
+.aud-title { font-weight:700;font-size:0.95rem;margin-bottom:0.3rem; }
+.aud-sub { color:var(--muted);font-size:0.8rem;line-height:1.5; }
+
+.steps-row { display:flex;gap:0;margin-top:3.5rem;position:relative; }
+.steps-row::before { content:'';position:absolute;top:32px;left:32px;right:32px;height:1px;background:linear-gradient(to right,var(--lime),var(--cyan),var(--pink),var(--lime));opacity:0.25; }
+.step { flex:1;text-align:center;padding:0 1.5rem;position:relative; }
+.step-num { width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.6rem;margin:0 auto 1.2rem;position:relative;z-index:1; }
+.sn1{background:#0d1f0d;border:1px solid var(--lime);color:var(--lime);box-shadow:0 0 20px rgba(200,255,0,0.2)}
+.sn2{background:#0d1f1f;border:1px solid var(--cyan);color:var(--cyan);box-shadow:0 0 20px rgba(0,255,204,0.2)}
+.sn3{background:#1f0d17;border:1px solid var(--pink);color:var(--pink);box-shadow:0 0 20px rgba(255,45,120,0.2)}
+.sn4{background:#1a1a0d;border:1px solid #ffaa00;color:#ffaa00;box-shadow:0 0 20px rgba(255,170,0,0.2)}
+.step h3 { font-weight:700;font-size:0.95rem;margin-bottom:0.4rem; }
+.step p { color:var(--muted);font-size:0.82rem;line-height:1.55; }
+
+.bento { display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:3.5rem; }
+.b-card { background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2rem;position:relative;overflow:hidden;transition:transform 0.3s,border-color 0.3s; }
+.b-card:hover { transform:translateY(-5px); }
+.b-card::before { content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.3s;border-radius:20px; }
+.bc-l::before{background:radial-gradient(ellipse at top left,rgba(200,255,0,0.07),transparent 65%)}
+.bc-c::before{background:radial-gradient(ellipse at top right,rgba(0,255,204,0.07),transparent 65%)}
+.bc-p::before{background:radial-gradient(ellipse at bottom left,rgba(255,45,120,0.07),transparent 65%)}
+.b-card:hover::before { opacity:1; }
+.bc-l:hover{border-color:rgba(200,255,0,0.25)}.bc-c:hover{border-color:rgba(0,255,204,0.2)}.bc-p:hover{border-color:rgba(255,45,120,0.2)}.b-wide{grid-column:span 2}
+.b-tag { display:inline-block;font-family:var(--mono);font-size:0.63rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;padding:3px 10px;border-radius:3px;margin-bottom:1rem; }
+.tl{background:rgba(200,255,0,0.12);color:var(--lime)}.tc{background:rgba(0,255,204,0.1);color:var(--cyan)}.tp{background:rgba(255,45,120,0.1);color:var(--pink)}.to{background:rgba(255,170,0,0.1);color:#ffaa00}
+.b-card h3 { font-size:1.05rem;font-weight:700;margin-bottom:0.5rem; }
+.b-card p { color:var(--muted);font-size:0.875rem;line-height:1.6; }
+.mini-graph { display:flex;align-items:flex-end;gap:4px;height:48px;margin-top:1.2rem; }
+.m-bar { flex:1;border-radius:3px 3px 0 0;background:linear-gradient(to top,var(--lime),rgba(200,255,0,0.3));animation:bP 2.5s ease-in-out infinite; }
+.m-bar:nth-child(2){animation-delay:0.2s}.m-bar:nth-child(3){animation-delay:0.4s}.m-bar:nth-child(4){animation-delay:0.6s}.m-bar:nth-child(5){animation-delay:0.8s}.m-bar:nth-child(6){animation-delay:1s}.m-bar:nth-child(7){animation-delay:1.2s}
+@keyframes bP{0%,100%{opacity:0.4;transform:scaleY(0.55)}50%{opacity:1;transform:scaleY(1)}}
+.code-snip { background:#080c18;border-radius:8px;padding:0.8rem 1rem;font-family:var(--mono);font-size:0.7rem;margin-top:1rem;line-height:1.9;border:1px solid rgba(255,255,255,0.05); }
+.ck{color:#ff79c6}.cf{color:var(--cyan)}.cv{color:var(--lime)}.cm{color:#3a4060}
+.acc-wrap { display:flex;align-items:center;gap:1.5rem;margin-top:1.2rem; }
+.acc-ring { position:relative;width:72px;height:72px;flex-shrink:0; }
+.acc-ring svg { transform:rotate(-90deg); }
+.acc-rtxt { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--cyan); }
+.acc-desc { color:var(--muted);font-size:0.8rem;line-height:1.5; }
+.orb-row { display:flex;gap:1rem;align-items:center;margin-top:1rem; }
+.orb { width:34px;height:34px;border-radius:50%;animation:oP 2s ease-in-out infinite;flex-shrink:0; }
+.og{background:var(--lime);box-shadow:0 0 18px rgba(200,255,0,0.5);animation-delay:0s}
+.ob{background:var(--cyan);box-shadow:0 0 18px rgba(0,255,204,0.5);animation-delay:0.6s}
+.op{background:var(--pink);box-shadow:0 0 18px rgba(255,45,120,0.5);animation-delay:1.2s}
+@keyframes oP{0%,100%{transform:scale(0.82);opacity:0.6}50%{transform:scale(1.1);opacity:1}}
+.orb-label { color:var(--muted);font-size:0.78rem; }
+
+.cta-sec { padding:8rem 0;position:relative;z-index:1;overflow:hidden; }
+.cta-glow { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(200,255,0,0.07) 0%,transparent 70%);pointer-events:none; }
+.cta-inner { text-align:center;max-width:700px;margin:0 auto;position:relative; }
+.cta-cards { display:flex;justify-content:center;gap:0.75rem;margin:2.5rem 0;flex-wrap:wrap; }
+.cta-card { background:var(--card);border:1px solid var(--border);border-radius:12px;padding:0.9rem 1.4rem;width:148px;text-align:left;transition:border-color 0.2s; }
+.cta-card:hover { border-color:rgba(200,255,0,0.2); }
+.cc-lbl { font-family:var(--mono);font-size:0.58rem;color:var(--lime);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px; }
+.cc-txt { font-size:0.8rem;color:var(--muted);line-height:1.4; }
+.gform-btn { display:inline-flex;align-items:center;gap:12px;background:var(--lime);color:#000;padding:1.1rem 3rem;border-radius:4px;text-decoration:none;font-weight:800;font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;box-shadow:0 0 50px rgba(200,255,0,0.35);transition:transform 0.2s,box-shadow 0.2s; }
+.gform-btn:hover { transform:scale(1.04);box-shadow:0 0 70px rgba(200,255,0,0.6); }
+.gform-note { color:var(--muted);font-size:0.8rem;margin-top:1rem;font-family:var(--mono); }
+
+footer { border-top:1px solid var(--border);padding:2rem 2.5rem;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1; }
+.foot-logo { font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.1em;color:var(--lime); }
+.foot-info { color:var(--muted);font-size:0.78rem;font-family:var(--mono);text-align:right;line-height:1.7; }
+
+.reveal { opacity:0;transform:translateY(28px);transition:opacity 0.7s ease,transform 0.7s ease; }
+.reveal.in { opacity:1;transform:none; }
+
+.cam-container { position:absolute; top:20px; right:20px; width:160px; height:120px; border-radius:12px; overflow:hidden; border:2px solid var(--lime); box-shadow:0 0 20px rgba(200,255,0,0.3); display:none; z-index:10; background:#000; }
+.cam-container.active { display:block; }
+.cam-video { display:none; }
+.cam-canvas { width:100%; height:100%; object-fit:cover; transform: scaleX(-1); }
+
+@media(max-width:768px){.who-grid{grid-template-columns:1fr;gap:3rem}.bento{grid-template-columns:1fr 1fr}.b-wide{grid-column:span 2}}
+@media(max-width:540px){.bento{grid-template-columns:1fr}.b-wide{grid-column:span 1}.steps-row{flex-direction:column;gap:2rem}.steps-row::before{display:none}.nav-links{display:none}.aud-grid{grid-template-columns:1fr}.cam-container{width:120px;height:90px;}}
+@media(max-width:420px){footer{flex-direction:column;gap:1rem;text-align:center}.foot-info{text-align:center}}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+
+<nav>
+  <div class="logo">AstaLaku</div>
+  <ul class="nav-links">
+    <li><a href="#siapa">Buat Siapa?</a></li>
+    <li><a href="#cara-kerja">Cara Kerja</a></li>
+    <li><a href="#fitur">Fitur</a></li>
+    <li><a href="#form" class="nav-pill">Isi Kuisioner</a></li>
+  </ul>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section class="hero">
+  <div class="hero-eyebrow">
+    <div class="e-dot"></div>
+    Gesture · Machine Learning · Real-time · Interaktif
+  </div>
+  <h1>
+    <span>Gerakkan</span>
+    <span class="h1-ghost">Tanganmu</span>
+    <span class="h1-acc">Robot Nurut</span>
+  </h1>
+  <p class="hero-sub">
+    AstaLaku mengubah gerakan tanganmu jadi perintah robot secara real-time. 
+    Visualisasi AI yang keren, belajar jadi gampang — buat siapa aja yang penasaran.
+  </p>
+  <div class="hero-btns">
+    <a href="#cara-kerja" class="btn-lime">Lihat Cara Kerjanya →</a>
+    <a href="#form" class="btn-out">Isi Kuisioner</a>
+  </div>
+
+  <div class="demo-wrap">
+    <div class="demo-outer">
+      <div class="demo-bar">
+        <div class="ddot d1"></div><div class="ddot d2"></div><div class="ddot d3"></div>
+        <div class="demo-ttl">astalaku_dashboard.exe</div>
+        <div class="demo-live"><div class="live-dot"></div>LIVE</div>
+      </div>
+      
+      <div style="display:flex; justify-content:center; margin-bottom: 1.2rem;">
+        <button id="toggle-cam-btn" class="g-btn" style="font-size:0.8rem; padding:0.7rem 1.8rem; border-radius:50px; font-weight:800; display:inline-flex; align-items:center; gap:8px; box-shadow: 0 0 20px rgba(200,255,0,0.1);">
+          <span style="font-size:1rem;">📷</span> BUKA KAMERA & MULAI
+        </button>
+      </div>
+
+      <canvas id="robot-canvas" width="600" height="290"></canvas>
+      
+      <!-- Camera PIX -->
+      <div class="cam-container" id="cam-container">
+        <video class="cam-video" id="input_video"></video>
+        <canvas class="cam-canvas" id="output_canvas" width="320" height="240"></canvas>
+      </div>
+
+      <div class="g-legend">
+        <div class="leg-item" data-cmd="maju"><span class="leg-j">1 JARI</span><span class="leg-c">MAJU</span></div>
+        <div class="leg-item" data-cmd="mundur"><span class="leg-j">KEPAL (0)</span><span class="leg-c">MUNDUR</span></div>
+        <div class="leg-item" data-cmd="kiri"><span class="leg-j">2 JARI</span><span class="leg-c">KIRI</span></div>
+        <div class="leg-item" data-cmd="kanan"><span class="leg-j">3 JARI</span><span class="leg-c">KANAN</span></div>
+        <div class="leg-item active" data-cmd="idle"><span class="leg-j">4 JARI</span><span class="leg-c">IDLE</span></div>
+        <div class="leg-item" data-cmd="stop"><span class="leg-j">5 JARI</span><span class="leg-c">STOP</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-wrap">
+  <div class="marquee-track">
+    <div class="marquee-item">GESTURE RECOGNITION <span>✦</span> LOGISTIC REGRESSION <span>✦</span> REAL-TIME VISUALIZATION <span>✦</span> ROBOT ANIMASI 2D <span>✦</span> HUMAN-ROBOT INTERACTION <span>✦</span> MODE SIMULASI <span>✦</span> MODE LATIHAN <span>✦</span></div>
+    <div class="marquee-item">GESTURE RECOGNITION <span>✦</span> LOGISTIC REGRESSION <span>✦</span> REAL-TIME VISUALIZATION <span>✦</span> ROBOT ANIMASI 2D <span>✦</span> HUMAN-ROBOT INTERACTION <span>✦</span> MODE SIMULASI <span>✦</span> MODE LATIHAN <span>✦</span></div>
+  </div>
+</div>
+
+<!-- ══ BUAT SIAPA ══ -->
+<section class="sec" id="siapa">
+  <div class="container">
+    <div class="who-grid">
+      <div class="reveal">
+        <div class="sec-label">Target Pengguna</div>
+        <h2 class="sec-title">Buat <span class="t-ghost">kamu</span><br>yang penasaran</h2>
+        <p class="sec-body">Nggak perlu background teknik berat. Kalau kamu tertarik sama robotika, AI, coding, atau sekadar pengen nyoba hal baru — AstaLaku dibuat buat kamu.</p>
+        <p class="sec-body" style="margin-top:1rem;">Dari pelajar SMK sampai mahasiswa, dari yang baru kenal robot sampai yang udah ngerti machine learning.</p>
+      </div>
+      <div class="aud-grid reveal">
+        <div class="aud-card a1"><span class="aud-ico">🎒</span><div class="aud-title">Pelajar SMK</div><div class="aud-sub">Semua jurusan, mau belajar robotika & AI dari nol secara seru.</div></div>
+        <div class="aud-card a2"><span class="aud-ico">🎓</span><div class="aud-title">Mahasiswa</div><div class="aud-sub">Mau eksplorasi HRI dan machine learning lebih dalam.</div></div>
+        <div class="aud-card a3"><span class="aud-ico">💡</span><div class="aud-title">Si Penasaran</div><div class="aud-sub">Nggak tau robot tapi kepingin cobain hal yang futuristik.</div></div>
+        <div class="aud-card a4"><span class="aud-ico">🔬</span><div class="aud-title">Guru & Peneliti</div><div class="aud-sub">Cari media pembelajaran interaktif yang engaging.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CARA KERJA ══ -->
+<section class="sec sec-border" id="cara-kerja">
+  <div class="container">
+    <div style="text-align:center;max-width:520px;margin:0 auto" class="reveal">
+      <div class="sec-label" style="justify-content:center">Cara Kerja</div>
+      <h2 class="sec-title">Dari tangan<br>ke robot</h2>
+      <p class="sec-body" style="margin:0 auto">Cuma 4 langkah dari gerakan tanganmu sampai robot bergerak nyata.</p>
+    </div>
+    <div class="steps-row reveal">
+      <div class="step"><div class="step-num sn1">01</div><h3>Tangkap Gesture</h3><p>Sensor mendeteksi gerakan tangan secara real-time tanpa delay.</p></div>
+      <div class="step"><div class="step-num sn2">02</div><h3>Proses AI</h3><p>Logistic Regression menganalisis & mengklasifikasikan pola gesturmu.</p></div>
+      <div class="step"><div class="step-num sn3">03</div><h3>Visualisasi Live</h3><p>Dashboard menampilkan hasil + confidence score secara instan.</p></div>
+      <div class="step"><div class="step-num sn4">04</div><h3>Robot Bergerak</h3><p>Animasi robot 2D langsung merespons — maju, mundur, belok, stop.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FITUR BENTO ══ -->
+<section class="sec sec-border" id="fitur">
+  <div class="container">
+    <div class="reveal">
+      <div class="sec-label">Fitur</div>
+      <h2 class="sec-title">Yang bikin<br><span class="t-ghost">AstaLaku beda</span></h2>
+    </div>
+    <div class="bento reveal">
+      <div class="b-card b-wide bc-l">
+        <div class="b-tag tl">Core Feature</div>
+        <h3>Visualisasi Klasifikasi Real-time</h3>
+        <p>Lihat langsung bagaimana AI memproses gesturmu. Bukan cuma hasilnya — seluruh prosesnya terpampang jelas di layar.</p>
+        <div class="mini-graph">
+          <div class="m-bar" style="height:35%"></div><div class="m-bar" style="height:60%"></div><div class="m-bar" style="height:45%"></div><div class="m-bar" style="height:80%"></div><div class="m-bar" style="height:55%"></div><div class="m-bar" style="height:92%"></div><div class="m-bar" style="height:70%"></div>
+        </div>
+      </div>
+      <div class="b-card bc-c">
+        <div class="b-tag tc">Under the Hood</div>
+        <h3>Lihat AI Bekerja</h3>
+        <p>AstaLaku membuka "dapur" AI-nya — kamu bisa lihat model klasifikasi bekerja langsung.</p>
+        <div class="code-snip">
+          <span class="ck">model</span> = <span class="cf">LogisticRegression</span>()<br>
+          <span class="ck">pred</span> = model.<span class="cf">predict</span>(<span class="cv">gesture</span>)<br>
+          <span class="cm"># → "MAJU" (conf: 92.4%)</span>
+        </div>
+      </div>
+      <div class="b-card bc-c">
+        <div class="b-tag tc">Performa</div>
+        <h3>Akurasi Tinggi</h3>
+        <p>Klasifikasi gesture yang cepat dan akurat untuk pengalaman belajar yang mulus tanpa gangguan.</p>
+        <div class="acc-wrap">
+          <div class="acc-ring">
+            <svg width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(0,255,204,0.12)" stroke-width="6"/>
+              <circle cx="36" cy="36" r="28" fill="none" stroke="var(--cyan)" stroke-width="6" stroke-dasharray="175.9" stroke-dashoffset="17.6" stroke-linecap="round"/>
+            </svg>
+            <div class="acc-rtxt">90+</div>
+          </div>
+          <div class="acc-desc">Akurasi klasifikasi pada kondisi pengujian terstruktur dengan berbagai gesture.</div>
+        </div>
+      </div>
+      <div class="b-card bc-p">
+        <div class="b-tag tp">Fleksibel</div>
+        <h3>2 Mode Belajar</h3>
+        <p>Simulasi untuk eksplorasi bebas. Latihan untuk belajar terpandu. Pilih sesuai gayamu.</p>
+        <div class="orb-row"><div class="orb og"></div><div class="orb-label">Simulasi — eksplorasi bebas</div></div>
+        <div class="orb-row" style="margin-top:0.6rem"><div class="orb ob"></div><div class="orb-label">Latihan — step-by-step</div></div>
+      </div>
+      <div class="b-card bc-l">
+        <div class="b-tag tl">Visual</div>
+        <h3>Animasi Robot 2D</h3>
+        <p>Robot bergerak sesuai gesturmu — bukan cuma teks. Feedback visual yang nyata dan instan.</p>
+      </div>
+      <div class="b-card">
+        <div class="b-tag to">Aksesibel</div>
+        <h3>Tanpa Alat Mahal</h3>
+        <p>Nggak perlu beli robot sungguhan jutaan rupiah. AstaLaku jalan di komputer biasa.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CTA KUISIONER ══ -->
+<section class="cta-sec sec-border" id="form">
+  <div class="cta-glow"></div>
+  <div class="container">
+    <div class="cta-inner reveal">
+      <div class="sec-label" style="justify-content:center">Kuisioner</div>
+      <h2 class="sec-title" style="font-size:clamp(3rem,7vw,6rem)">Bantu kami<br><span style="color:var(--lime)">bikin lebih keren</span></h2>
+      <p class="sec-body" style="margin:0 auto;max-width:440px">Pendapatmu sangat berarti. Isi kuisioner singkat ini — ceritakan pengalaman belajarmu dan ekspektasimu buat AstaLaku.</p>
+      <div class="cta-cards">
+        <div class="cta-card"><div class="cc-lbl">Bagian A</div><div class="cc-txt">Identitas & info dirimu</div></div>
+        <div class="cta-card"><div class="cc-lbl">Bagian B</div><div class="cc-txt">Pengalaman belajar robot</div></div>
+        <div class="cta-card"><div class="cc-lbl">Bagian C</div><div class="cc-txt">Pendapatmu soal AstaLaku</div></div>
+        <div class="cta-card"><div class="cc-lbl">Bagian D</div><div class="cc-txt">Harapan & saranmu</div></div>
+      </div>
+      <a href="https://forms.gle/nirKLN9ggZQWf6wj9" class="gform-btn" target="_blank">📝 Isi Kuisioner Sekarang</a>
+      <p class="gform-note">// gratis · ±5 menit · tanpa login</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-logo">AstaLaku</div>
+  <div class="foot-info">Naufal Zakka Widodo · 230491100009<br>Trainer Interaktif Human-Robot Interaction</div>
+</footer>
+
+<script>
+
+
+/* PARTICLE BG */
+const bgc=document.getElementById('bg-canvas'),bgx=bgc.getContext('2d');
+function rsz(){bgc.width=window.innerWidth;bgc.height=window.innerHeight;}rsz();
+window.addEventListener('resize',rsz);
+const pts=Array.from({length:55},()=>({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,r:Math.random()*1.4+0.3,vx:(Math.random()-0.5)*0.2,vy:(Math.random()-0.5)*0.2,a:Math.random()*0.35+0.08}));
+function drawBg(){
+  bgx.clearRect(0,0,bgc.width,bgc.height);
+  pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=bgc.width;if(p.x>bgc.width)p.x=0;if(p.y<0)p.y=bgc.height;if(p.y>bgc.height)p.y=0;bgx.beginPath();bgx.arc(p.x,p.y,p.r,0,Math.PI*2);bgx.fillStyle=`rgba(200,255,0,${p.a})`;bgx.fill();});
+  pts.forEach((a,i)=>pts.slice(i+1).forEach(b=>{const d=Math.hypot(a.x-b.x,a.y-b.y);if(d<110){bgx.beginPath();bgx.moveTo(a.x,a.y);bgx.lineTo(b.x,b.y);bgx.strokeStyle=`rgba(200,255,0,${0.05*(1-d/110)})`;bgx.lineWidth=0.5;bgx.stroke();}}));
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+/* ROBOT CANVAS */
+const rc=document.getElementById('robot-canvas'),ctx=rc.getContext('2d');
+const dpr=window.devicePixelRatio||1;
+const W=600,H=290;
+rc.style.width=W+'px';rc.style.height=H+'px';
+rc.width=W*dpr;rc.height=H*dpr;
+ctx.scale(dpr,dpr);
+
+let bot={x:W/2,y:H/2,angle:-Math.PI/2,cmd:'idle',wave:0,trail:[],conf:0.95};
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);c.lineTo(x+r,y+h);c.arcTo(x,y+h,x,y+h-r,r);c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();}
+
+const CC={idle:'#555577',maju:'#c8ff00',mundur:'#ff6b6b',kiri:'#00ffcc',kanan:'#00ffcc',stop:'#ff2d78'};
+
+function drawGrid(){
+  ctx.strokeStyle='rgba(200,255,0,0.04)';ctx.lineWidth=0.5;
+  for(let x=0;x<W;x+=28){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=28){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawHUD(){
+  const c=CC[bot.cmd]||'#888';
+  ctx.fillStyle='rgba(6,8,16,0.7)';rr(ctx,10,10,158,78,8);ctx.fill();
+  ctx.strokeStyle=c;ctx.lineWidth=1;rr(ctx,10,10,158,78,8);ctx.stroke();
+  ctx.fillStyle='rgba(200,255,0,0.5)';ctx.font='600 8px JetBrains Mono';ctx.fillText('// COMMAND',18,26);
+  ctx.fillStyle=c;ctx.font='700 20px Bebas Neue';ctx.fillText(bot.cmd.toUpperCase(),18,52);
+  ctx.fillStyle='rgba(255,255,255,0.07)';rr(ctx,18,60,132,4,2);ctx.fill();
+  ctx.fillStyle=c;rr(ctx,18,60,132*bot.conf,4,2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='400 8px JetBrains Mono';ctx.fillText(`conf: ${(bot.conf*100).toFixed(1)}%`,18,76);
+  // coords
+  ctx.fillStyle='rgba(6,8,16,0.7)';rr(ctx,W-130,10,120,55,8);ctx.fill();
+  ctx.strokeStyle='rgba(0,255,204,0.25)';ctx.lineWidth=1;rr(ctx,W-130,10,120,55,8);ctx.stroke();
+  ctx.fillStyle='rgba(0,255,204,0.55)';ctx.font='600 8px JetBrains Mono';ctx.fillText('// POSITION',W-122,26);
+  ctx.fillStyle='#00ffcc';ctx.font='600 10px JetBrains Mono';
+  ctx.fillText(`x: ${(bot.x-W/2).toFixed(0)}`,W-122,44);ctx.fillText(`y: ${(bot.y-H/2).toFixed(0)}`,W-122,58);
+}
+
+function drawTrail(){
+  bot.trail.forEach((p,i)=>{const a=(i/bot.trail.length)*0.25;ctx.beginPath();ctx.arc(p.x,p.y,2,0,Math.PI*2);ctx.fillStyle=`rgba(200,255,0,${a})`;ctx.fill();});
+}
+
+function drawRobot(x,y,ang,w,cmd){
+  const c=CC[cmd]||'#888';
+  ctx.save();ctx.translate(x,y);ctx.rotate(ang+Math.PI/2);
+  if(cmd!=='idle'&&cmd!=='stop'){ctx.shadowColor=c;ctx.shadowBlur=12;}
+  // wheels
+  [[-17,10],[17,10],[-17,-3],[17,-3]].forEach(([wx,wy])=>{ctx.fillStyle='#1a2340';ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(wx,wy,5,8,Math.PI/2,0,Math.PI*2);ctx.fill();ctx.stroke();});
+  // body
+  ctx.fillStyle='#0d1526';ctx.strokeStyle=c;ctx.lineWidth=1.5;rr(ctx,-19,-20,38,34,5);ctx.fill();ctx.stroke();
+  // body lines
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=0.5;
+  for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(i*8,-16);ctx.lineTo(i*8,10);ctx.stroke();}
+  // arms
+  const aw=Math.sin(w)*0.5;
+  [-1,1].forEach(side=>{ctx.save();ctx.translate(side*21,-6);ctx.rotate(side*(aw+0.3));ctx.fillStyle='#1a2340';ctx.strokeStyle=c;ctx.lineWidth=1.2;rr(ctx,-4,0,8,16,3);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(0,19,4,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();});
+  // head
+  ctx.shadowBlur=0;ctx.fillStyle='#0d1526';ctx.strokeStyle=c;ctx.lineWidth=1.5;rr(ctx,-13,-36,26,17,4);ctx.fill();ctx.stroke();
+  // antenna
+  ctx.beginPath();ctx.moveTo(0,-36);ctx.lineTo(0,-46);ctx.strokeStyle=c;ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,-48,4,0,Math.PI*2);ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+  // eyes
+  ctx.shadowColor=c;ctx.shadowBlur=8;
+  [[-6,0],[6,0]].forEach(([ex])=>{ctx.beginPath();ctx.arc(ex,-29,3.5,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();ctx.beginPath();ctx.arc(ex+0.8,-29,1.4,0,Math.PI*2);ctx.fillStyle='#000';ctx.fill();});
+  ctx.shadowBlur=0;
+  // chest
+  ctx.fillStyle='rgba(0,0,0,0.5)';rr(ctx,-11,-14,22,12,3);ctx.fill();ctx.strokeStyle=c;ctx.lineWidth=0.8;rr(ctx,-11,-14,22,12,3);ctx.stroke();
+  [0,1,2].forEach(i=>{const bw=6+Math.sin(w+i)*3;ctx.fillStyle=c;ctx.globalAlpha=0.5+Math.sin(w+i*0.8)*0.4;rr(ctx,-9+i*8,-12,bw,2.5,1);ctx.fill();ctx.globalAlpha=1;});
+  ctx.restore();
+}
+
+let t=0;
+function loop(){
+  t+=0.04;bot.wave+=0.08;
+  const sp=1.6;
+  if(bot.cmd==='maju'){bot.x+=Math.cos(bot.angle)*sp;bot.y+=Math.sin(bot.angle)*sp;bot.conf=0.92+Math.sin(t)*0.04;}
+  else if(bot.cmd==='mundur'){bot.x-=Math.cos(bot.angle)*sp;bot.y-=Math.sin(bot.angle)*sp;bot.conf=0.87+Math.sin(t)*0.05;}
+  else if(bot.cmd==='kiri'){bot.angle-=0.042;bot.x+=Math.cos(bot.angle)*sp*0.5;bot.y+=Math.sin(bot.angle)*sp*0.5;bot.conf=0.89+Math.sin(t)*0.04;}
+  else if(bot.cmd==='kanan'){bot.angle+=0.042;bot.x+=Math.cos(bot.angle)*sp*0.5;bot.y+=Math.sin(bot.angle)*sp*0.5;bot.conf=0.89+Math.sin(t)*0.04;}
+  else if(bot.cmd==='stop'){bot.conf=0.99;}
+  else{bot.conf=0.45+Math.sin(t)*0.1;}
+  const pd=38;
+  if(bot.x<pd){bot.x=pd;bot.angle=0;}if(bot.x>W-pd){bot.x=W-pd;bot.angle=Math.PI;}
+  if(bot.y<pd){bot.y=pd;bot.angle=Math.PI/2;}if(bot.y>H-pd){bot.y=H-pd;bot.angle=-Math.PI/2;}
+  if(['maju','kiri','kanan'].includes(bot.cmd)){bot.trail.push({x:bot.x,y:bot.y});if(bot.trail.length>28)bot.trail.shift();}
+  ctx.clearRect(0,0,W,H);
+  drawGrid();drawTrail();drawRobot(bot.x,bot.y,bot.angle,bot.wave,bot.cmd);drawHUD();
+  requestAnimationFrame(loop);
+}
+loop();
+
+
+
+/* SCROLL REVEAL */
+const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');});},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+document.querySelectorAll('.b-card,.aud-card').forEach((el,i)=>{el.style.transitionDelay=(i*0.08)+'s';});
+
+/* MEDIA PIPE HANDS LOGIC */
+const videoElement = document.getElementById('input_video');
+const canvasElement = document.getElementById('output_canvas');
+const canvasCtx = canvasElement.getContext('2d');
+const camContainer = document.getElementById('cam-container');
+const toggleCamBtn = document.getElementById('toggle-cam-btn');
+
+let cameraActive = false;
+let camera = null;
+
+const hands = new Hands({locateFile: (file) => {
+  return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+}});
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+hands.onResults(function(results) {
+  canvasCtx.save();
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+  
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const landmarks = results.multiHandLandmarks[0];
+    
+    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.5)', lineWidth: 2});
+    drawLandmarks(canvasCtx, landmarks, {color: '#c8ff00', lineWidth: 1, radius: 2});
+    
+    let detectedCmd = 'idle';
+    
+    // Y-coordinate: 0 is top, 1 is bottom. Smaller Y = higher.
+    const isIndexOpen = landmarks[8].y < landmarks[6].y;
+    const isMiddleOpen = landmarks[12].y < landmarks[10].y;
+    const isRingOpen = landmarks[16].y < landmarks[14].y;
+    const isPinkyOpen = landmarks[20].y < landmarks[18].y;
+    // Thumb logic is a bit tricky, relying on x position relative to other joints
+    const isThumbOpen = Math.abs(landmarks[4].x - landmarks[2].x) > 0.05;
+
+    const totalOpenFingers = [isThumbOpen, isIndexOpen, isMiddleOpen, isRingOpen, isPinkyOpen].filter(x => x).length;
+    
+    if (totalOpenFingers === 0) detectedCmd = 'mundur';
+    else if (totalOpenFingers === 1) detectedCmd = 'maju';
+    else if (totalOpenFingers === 2) detectedCmd = 'kiri';
+    else if (totalOpenFingers === 3) detectedCmd = 'kanan';
+    else if (totalOpenFingers === 4) detectedCmd = 'idle';
+    else if (totalOpenFingers === 5) detectedCmd = 'stop';
+    
+    // Simulate button click to update UI and Robot state
+    if (detectedCmd !== bot.cmd && ['maju', 'mundur', 'kiri', 'kanan', 'stop', 'idle'].includes(detectedCmd)) {
+        document.querySelectorAll('.leg-item').forEach(b => {
+           b.classList.remove('active');
+           if(b.dataset.cmd === detectedCmd) b.classList.add('active');
+        });
+        bot.cmd = detectedCmd;
+        if(['idle','stop'].includes(bot.cmd)) bot.trail = [];
+    }
+  }
+  canvasCtx.restore();
+});
+
+toggleCamBtn.addEventListener('click', () => {
+  if (!cameraActive) {
+    camContainer.classList.add('active');
+    toggleCamBtn.innerText = "⏳ MEMUAT...";
+    toggleCamBtn.style.color = "var(--lime)";
+    
+    if (!camera) {
+        camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await hands.send({image: videoElement});
+          },
+          width: 320,
+          height: 240
+        });
+    }
+    camera.start().then(() => {
+        cameraActive = true;
+        toggleCamBtn.innerText = "🛑 TUTUP KAMERA";
+        toggleCamBtn.style.color = "#ff2d78";
+        toggleCamBtn.style.borderColor = "#ff2d78";
+    });
+  } else {
+    if(camera) {
+        camera.stop();
+    }
+    cameraActive = false;
+    camContainer.classList.remove('active');
+    toggleCamBtn.innerText = "📷 BUKA KAMERA";
+    toggleCamBtn.style.color = "";
+    toggleCamBtn.style.borderColor = "";
+    
+    // Reset cmd
+    bot.cmd = 'idle';
+    document.querySelectorAll('.leg-item').forEach(b => {
+       if(b.dataset.cmd === 'idle') b.classList.add('active');
+       else b.classList.remove('active');
+    });
+  }
+});
+</script>
+</body>
+</html>
